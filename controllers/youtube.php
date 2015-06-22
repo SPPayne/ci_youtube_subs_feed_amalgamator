@@ -148,6 +148,8 @@ class Youtube extends CI_Controller {
 		//Set values
 		curl_setopt($ch, CURLOPT_URL, $url);
 		curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+		curl_setopt($ch, CURLOPT_VERBOSE, FALSE);
+		curl_setopt($ch, CURLOPT_NOPROGRESS, TRUE);
 		
 		//Execute CURL
 		$data = curl_exec($ch);
