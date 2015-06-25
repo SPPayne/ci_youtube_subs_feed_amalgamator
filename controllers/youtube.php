@@ -8,14 +8,61 @@ class Youtube extends CI_Controller {
 		
 		//Set timezone
 		date_default_timezone_set('Etc/GMT');
+		
+		//Set feed key, directory path and video-per-feed check limit
+		$this->feed_key = [INSERT KEY HERE];
+		$this->directory_path = [INSERT FILE PATH HERE];
+		$this->vid_limit = 2;
 
 	}
 	
 	//Expects a file exported from YouTube subscriptions manager - click the "export subscriptions" button
 	//https://www.youtube.com/subscription_manager
 	
-	//Designed to be run on the command line to dump out a file
-	//e.g. 0 */6 * * * php -q [INSERT PATH TO YOUR ROOT DIRECTORY HERE] youtube fetch_feed [INSERT KEY HERE] >/dev/null 2>&1
+	//Designed to be run on the command line to dump out a file - please note we're using CodeIgniter!
+	//e.g. 0 */6 * * * php -q [FILEPATH]/index.php youtube fetch_feed [KEY] >/dev/null 2>&1
+	
+	//Any problems, consult my blog post about this:
+	//http://www.payneful.co.uk/portfolio/2015/07/03/creating-a-new-youtube-subscription-feed/
+	
+	//Function: presents feed to page, crucially passes back "last-modified" header - use this to present your feed!
+	public function show_feed($key = FALSE){
+		
+		//Use a fixed key here to validate the feed accessing it - kill function if not a valid key
+		if($key != $this->feed_key){
+			return FALSE;
+		}
+		
+		//Set RSS path
+		$file = "subscriptions.rss";
+		$path = $this->directory_path . $file;
+		
+		//Check file exists
+		if(!file_exists($path)){
+			return FALSE;
+		}
+
+		//Convert to XML object, get first item and then it's date
+		$rss_parse = simplexml_load_file($path);
+		if($rss_parse){
+			$item = $rss_parse->channel->item;
+			$last_modified = $item->pubDate;
+		} else {
+			return FALSE;
+		}
+		
+		//DEBUG
+		//echo $last_modified;die;
+		
+		//Spit out a header for the last modified date, and then spill out the contents of the file
+		//Ref: http://php.net/manual/en/function.header.php
+		//Ref: http://fishbowl.pastiche.org/2002/10/21/http_conditional_get_for_rss_hackers/
+		//Ref: http://stackoverflow.com/questions/1911094/is-there-a-way-to-have-a-codeigniter-controller-return-an-image
+		header('Last-Modified: ' . $last_modified, TRUE);
+		readfile($path);
+		die(); exit;
+		
+	}
 	
 	//Function: processes all of the feeds!
 	public function fetch_feed($key = FALSE){
@@ -30,16 +77,20 @@ class Youtube extends CI_Controller {
 			return FALSE;
 		}
 		
+		//Prevent calls outside of Command Line - this broke on my server but uncomment it if it's of value to you
+		//Ref: http://zacharyflower.com/2014/08/07/running-codeigniter-controllers-in-the-command-line/
+		/*if(!$this->input->is_cli_request()){
+			return FALSE;
+		}*/
+		
 		//Use a fixed key here to validate the feed accessing it - kill function if not a valid key
-		//I recommend generating a random key but you can use pretty much anything
-		if($key != [INSERT KEY HERE]){
+		if($key != $this->feed_key){
 			return FALSE;
 		}
 		
 		//Set XML path - replace the file with an updated version to update subs
 		$file = "subscription_manager.opml";
-		$directory = [INSERT FILE PATH HERE];
-		$path = $directory . $file;
+		$path = $this->directory_path . $file;
 		
 		//Check file integrity
 		if(!file_exists($path)){
@@ -99,7 +150,7 @@ class Youtube extends CI_Controller {
 		//print_r($feeds);
 		
 		//Set limit of videos to check against
-		$vid_limit = 2;
+		$vid_limit = $this->vid_limit;
 		
 		//Use function to loop through all feeds, return array
 		$rss_items = $this->_process_feeds($feeds,$vid_limit);
@@ -115,7 +166,7 @@ class Youtube extends CI_Controller {
 		
 		//Set RSS values
 		$data['rss_title'] = "My YouTube Subscriptions";
-		$data['rss_url'] = base_url() . "youtube/fetch_feed/[INSERT KEY HERE]";
+		$data['rss_url'] = base_url() . "youtube/show_feed/" . $this->feed_key;
 		$data['rss_description'] = "Take that, Google! I can get around your RSS limiting!";
 		
 		//Load rss view into variable
@@ -127,7 +178,7 @@ class Youtube extends CI_Controller {
 		
 		//Setup the file and path we will write to
 		$new_file = "subscriptions.rss";
-		$path = $directory . $new_file;
+		$path = $this->directory_path . $new_file;
 		
 		//Write RSS to a file
 		$this->_write_rss($path,$rss);
@@ -244,7 +295,7 @@ class Youtube extends CI_Controller {
 					//echo $date . " " . $title . " " . $link . " " . $description. "<br />";
 					
 					//Add to array
-					$rss_arrange[$date]['title'] = $title;
+					$rss_arrange[$date]['title'] = $author . ": " . $title;
 					$rss_arrange[$date]['desc'] = "<a href='" . $link . "'><img width='200' align='right' src='" . $thumbnail . "' /></a>";
 					$rss_arrange[$date]['desc'] .= "Latest video from " . $author . ": " . $description;
 					$rss_arrange[$date]['link'] = $link;
